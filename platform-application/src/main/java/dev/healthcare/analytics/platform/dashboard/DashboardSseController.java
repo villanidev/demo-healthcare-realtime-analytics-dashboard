@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.healthcare.analytics.platform.analyticsschema.service.AppointmentFunnelReadService;
 import dev.healthcare.analytics.platform.analyticsschema.view.AppointmentFunnelSnapshot;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -34,9 +36,15 @@ public class DashboardSseController {
 
     private final List<ClientSubscription> subscriptions = new CopyOnWriteArrayList<>();
 
-    public DashboardSseController(AppointmentFunnelReadService funnelReadService, ObjectMapper objectMapper) {
+    public DashboardSseController(AppointmentFunnelReadService funnelReadService,
+                                  ObjectMapper objectMapper,
+                                  MeterRegistry meterRegistry) {
         this.funnelReadService = funnelReadService;
         this.objectMapper = objectMapper;
+
+        Gauge.builder("platform.dashboard.sse.subscriptions", subscriptions, List::size)
+                .description("Number of active SSE dashboard subscriptions")
+                .register(meterRegistry);
     }
 
     @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)

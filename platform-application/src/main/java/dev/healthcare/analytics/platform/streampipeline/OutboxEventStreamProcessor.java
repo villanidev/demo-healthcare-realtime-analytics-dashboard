@@ -8,6 +8,9 @@ import dev.healthcare.analytics.platform.analyticsschema.fact.AppointmentFunnelF
 import dev.healthcare.analytics.platform.analyticsschema.repository.AppointmentFunnelFactRepository;
 import dev.healthcare.analytics.platform.appschema.outbox.AppOutboxEvent;
 import dev.healthcare.analytics.platform.appschema.outbox.AppOutboxEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,7 +18,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * OutboxEventStreamProcessor is the core Kappa stream processor.
@@ -34,14 +39,23 @@ public class OutboxEventStreamProcessor {
     private final AppointmentFunnelFactRepository appointmentFunnelFactRepository;
     private final ObjectMapper objectMapper;
 
+    private final Counter eventsProcessedCounter;
+    private final AtomicLong outboxLagSeconds = new AtomicLong(0L);
+
     public OutboxEventStreamProcessor(AppOutboxEventRepository outboxEventRepository,
                                       StreamCheckpointRepository checkpointRepository,
                                       AppointmentFunnelFactRepository appointmentFunnelFactRepository,
-                                      ObjectMapper objectMapper) {
+                                      ObjectMapper objectMapper,
+                                      MeterRegistry meterRegistry) {
         this.outboxEventRepository = outboxEventRepository;
         this.checkpointRepository = checkpointRepository;
         this.appointmentFunnelFactRepository = appointmentFunnelFactRepository;
         this.objectMapper = objectMapper;
+
+        this.eventsProcessedCounter = meterRegistry.counter("platform.outbox.events.processed");
+        Gauge.builder("platform.outbox.lag.seconds", outboxLagSeconds, AtomicLong::get)
+                .description("Approximate lag between latest outbox event time and now")
+                .register(meterRegistry);
     }
 
     @Scheduled(fixedDelayString = "${platform.stream-pipeline.outbox-poll-interval-ms:1000}")
@@ -56,9 +70,19 @@ public class OutboxEventStreamProcessor {
         }
 
         long highestSeenId = lastProcessedId;
+        Instant maxEventTime = null;
         for (AppOutboxEvent event : batch) {
             highestSeenId = Math.max(highestSeenId, event.getId());
             projectOutboxEvent(event);
+            eventsProcessedCounter.increment();
+            if (event.getEventTime() != null && (maxEventTime == null || event.getEventTime().isAfter(maxEventTime))) {
+                maxEventTime = event.getEventTime();
+            }
+        }
+
+        if (maxEventTime != null) {
+            long lag = ChronoUnit.SECONDS.between(maxEventTime, Instant.now());
+            outboxLagSeconds.set(Math.max(lag, 0L));
         }
 
         checkpoint.setLastProcessedEventId(highestSeenId);
