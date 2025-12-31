@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Healthcare Real-time Analytics Dashboard</title>
+    <link
+      rel="stylesheet"
+      th:href="@{/webjars/bootstrap/5.3.3/css/bootstrap.min.css}"
+    />
+    <script th:src="@{/webjars/htmx.org/2.0.3/dist/htmx.min.js}"></script>
+    <script th:src="@{/webjars/chart.js/4.4.6/dist/chart.umd.js}"></script>
+  </head>
+  <body class="bg-light">
+    <div class="container py-4">
+      <div class="row mb-3">
+        <div class="col">
+          <h1 class="h3">Healthcare Real-time Analytics</h1>
+          <p class="text-muted mb-0">
+            POC &mdash; Appointment funnel and modality metrics (Kappa-style).
+          </p>
+        </div>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Organization ID</label>
+          <input
+            id="organizationId"
+            type="text"
+            class="form-control"
+            value="1"
+          />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Clinic ID</label>
+          <input id="clinicId" type="text" class="form-control" value="1" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button id="connectButton" class="btn btn-primary w-100">
+            Connect stream
+          </button>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <span id="connectionStatus" class="text-muted small"
+            >Disconnected</span
+          >
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h6 class="card-title">Scheduled appointments</h6>
+              <div id="scheduledCount" class="display-6">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h6 class="card-title">Completed appointments</h6>
+              <div id="completedCount" class="display-6">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h6 class="card-title">Virtual / In-person</h6>
+              <div class="display-6">
+                <span id="virtualCount">0</span>/<span id="inPersonCount"
+                  >0</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h6 class="card-title">Avg. lead/consult (min)</h6>
+              <div class="small">Lead: <span id="avgLeadMinutes">0</span></div>
+              <div class="small">
+                Consult: <span id="avgConsultMinutes">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">Appointment funnel</div>
+            <div class="card-body">
+              <canvas id="funnelChart" height="160"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">Modality mix</div>
+            <div class="card-body">
+              <canvas id="modalityChart" height="160"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script th:inline="javascript">
+      let eventSource = null;
+      let funnelChart = null;
+      let modalityChart = null;
+
+      function initCharts() {
+        const funnelCtx = document.getElementById("funnelChart");
+        funnelChart = new Chart(funnelCtx, {
+          type: "bar",
+          data: {
+            labels: ["Scheduled", "Completed"],
+            datasets: [
+              {
+                label: "Appointments",
+                data: [0, 0],
+                backgroundColor: ["#0d6efd", "#20c997"],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+          },
+        });
+
+        const modalityCtx = document.getElementById("modalityChart");
+        modalityChart = new Chart(modalityCtx, {
+          type: "doughnut",
+          data: {
+            labels: ["Virtual", "In-person"],
+            datasets: [
+              {
+                data: [0, 0],
+                backgroundColor: ["#6610f2", "#fd7e14"],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: "bottom" } },
+          },
+        });
+      }
+
+      function connectStream() {
+        const orgId = document.getElementById("organizationId").value;
+        const clinicId = document.getElementById("clinicId").value;
+
+        if (eventSource) {
+          eventSource.close();
+        }
+
+        const url = `/api/analytics/stream?organizationId=${encodeURIComponent(
+          orgId
+        )}&clinicId=${encodeURIComponent(clinicId)}`;
+        eventSource = new EventSource(url);
+
+        document.getElementById("connectionStatus").textContent =
+          "Connecting...";
+
+        eventSource.addEventListener("analytics-snapshot", function (event) {
+          try {
+            const snapshot = JSON.parse(event.data);
+            updateDashboard(snapshot);
+            document.getElementById("connectionStatus").textContent =
+              "Connected";
+          } catch (e) {
+            console.error("Failed to parse snapshot", e);
+          }
+        });
+
+        eventSource.onerror = function () {
+          document.getElementById("connectionStatus").textContent =
+            "Disconnected (auto-retry)";
+        };
+      }
+
+      function updateDashboard(snapshot) {
+        document.getElementById("scheduledCount").textContent =
+          snapshot.scheduledCount ?? 0;
+        document.getElementById("completedCount").textContent =
+          snapshot.completedCount ?? 0;
+        document.getElementById("virtualCount").textContent =
+          snapshot.virtualCount ?? 0;
+        document.getElementById("inPersonCount").textContent =
+          snapshot.inPersonCount ?? 0;
+
+        const leadMinutes = snapshot.averageScheduledToStartSeconds
+          ? (snapshot.averageScheduledToStartSeconds / 60).toFixed(1)
+          : "0";
+        const consultMinutes = snapshot.averageStartToCompleteSeconds
+          ? (snapshot.averageStartToCompleteSeconds / 60).toFixed(1)
+          : "0";
+        document.getElementById("avgLeadMinutes").textContent = leadMinutes;
+        document.getElementById("avgConsultMinutes").textContent =
+          consultMinutes;
+
+        if (funnelChart) {
+          funnelChart.data.datasets[0].data = [
+            snapshot.scheduledCount ?? 0,
+            snapshot.completedCount ?? 0,
+          ];
+          funnelChart.update("none");
+        }
+
+        if (modalityChart) {
+          modalityChart.data.datasets[0].data = [
+            snapshot.virtualCount ?? 0,
+            snapshot.inPersonCount ?? 0,
+          ];
+          modalityChart.update("none");
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        initCharts();
+        document
+          .getElementById("connectButton")
+          .addEventListener("click", connectStream);
+      });
+    </script>
+  </body>
+</html>

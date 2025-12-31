@@ -43,5 +43,94 @@ public class AppointmentFunnelFact {
     @Column(name = "start_to_complete_seconds")
     private Long startToCompleteSeconds;
 
-    // Getters and setters omitted for brevity in this POC skeleton
+    public AppointmentFunnelFact() {
+    }
+
+    public String getAppointmentId() {
+        return appointmentId;
+    }
+
+    public void setAppointmentId(String appointmentId) {
+        this.appointmentId = appointmentId;
+    }
+
+    public String getOrganizationId() {
+        return organizationId;
+    }
+
+    public void setOrganizationId(String organizationId) {
+        this.organizationId = organizationId;
+    }
+
+    public String getClinicId() {
+        return clinicId;
+    }
+
+    public void setClinicId(String clinicId) {
+        this.clinicId = clinicId;
+    }
+
+    public String getPatientId() {
+        return patientId;
+    }
+
+    public void setPatientId(String patientId) {
+        this.patientId = patientId;
+    }
+
+    public String getModality() {
+        return modality;
+    }
+
+    public void setModality(String modality) {
+        this.modality = modality;
+    }
+
+    public Instant getScheduledAt() {
+        return scheduledAt;
+    }
+
+    public void setScheduledAt(Instant scheduledAt) {
+        this.scheduledAt = scheduledAt;
+    }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    public void setStartedAt(Instant startedAt) {
+        this.startedAt = startedAt;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(Instant completedAt) {
+        this.completedAt = completedAt;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Long getScheduledToStartSeconds() {
+        return scheduledToStartSeconds;
+    }
+
+    public void setScheduledToStartSeconds(Long scheduledToStartSeconds) {
+        this.scheduledToStartSeconds = scheduledToStartSeconds;
+    }
+
+    public Long getStartToCompleteSeconds() {
+        return startToCompleteSeconds;
+    }
+
+    public void setStartToCompleteSeconds(Long startToCompleteSeconds) {
+        this.startToCompleteSeconds = startToCompleteSeconds;
+    }
 }
