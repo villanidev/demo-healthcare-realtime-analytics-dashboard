@@ -47,5 +47,6 @@ logging:
 platform:
   stream-pipeline:
     outbox-poll-interval-ms: 1000
+    outbox-batch-size: 500
   simulation:
     enabled: false

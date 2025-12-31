@@ -13,6 +13,10 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -42,15 +46,19 @@ public class OutboxEventStreamProcessor {
     private final Counter eventsProcessedCounter;
     private final AtomicLong outboxLagSeconds = new AtomicLong(0L);
 
+    private final int outboxBatchSize;
+
     public OutboxEventStreamProcessor(AppOutboxEventRepository outboxEventRepository,
                                       StreamCheckpointRepository checkpointRepository,
                                       AppointmentFunnelFactRepository appointmentFunnelFactRepository,
                                       ObjectMapper objectMapper,
-                                      MeterRegistry meterRegistry) {
+                                      MeterRegistry meterRegistry,
+                                      @Value("${platform.stream-pipeline.outbox-batch-size:500}") int outboxBatchSize) {
         this.outboxEventRepository = outboxEventRepository;
         this.checkpointRepository = checkpointRepository;
         this.appointmentFunnelFactRepository = appointmentFunnelFactRepository;
         this.objectMapper = objectMapper;
+        this.outboxBatchSize = outboxBatchSize;
 
         this.eventsProcessedCounter = meterRegistry.counter("platform.outbox.events.processed");
         Gauge.builder("platform.outbox.lag.seconds", outboxLagSeconds, AtomicLong::get)
@@ -64,7 +72,8 @@ public class OutboxEventStreamProcessor {
                 .orElseGet(() -> new StreamCheckpoint(STREAM_NAME, 0L));
 
         long lastProcessedId = checkpoint.getLastProcessedEventId();
-        List<AppOutboxEvent> batch = outboxEventRepository.findTop200ByIdGreaterThanOrderByIdAsc(lastProcessedId);
+        Pageable pageRequest = PageRequest.of(0, outboxBatchSize, Sort.by("id").ascending());
+        List<AppOutboxEvent> batch = outboxEventRepository.findByIdGreaterThanOrderByIdAsc(lastProcessedId, pageRequest);
         if (batch.isEmpty()) {
             return;
         }

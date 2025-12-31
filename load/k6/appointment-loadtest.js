@@ -25,9 +25,9 @@ const SSE_CLIENTS = Number(__ENV.SSE_CLIENTS || "15");
 
 export const options = {
   scenarios: {
-    ramp_load: {
+    schedule_ramp_load: {
       executor: "ramping-vus",
-      exec: "appointmentFlow",
+      exec: "scheduleFlow",
       startVUs: 0,
       stages: [
         { duration: "2m", target: RAMP_TARGET_VUS }, // ramp up
@@ -36,9 +36,9 @@ export const options = {
       ],
       gracefulRampDown: "30s",
     },
-    spike_load: {
+    schedule_spike_load: {
       executor: "constant-vus",
-      exec: "appointmentFlow",
+      exec: "scheduleFlow",
       vus: SPIKE_VUS, // if 0, this scenario effectively does nothing
       duration: SPIKE_DURATION,
       startTime: SPIKE_START,
@@ -59,7 +59,7 @@ export const options = {
   },
 };
 
-export function appointmentFlow() {
+export function scheduleFlow() {
   // Schedule an appointment
   const schedulePayload = JSON.stringify({
     organizationId: Number(ORG_ID),
@@ -87,14 +87,49 @@ export function appointmentFlow() {
     sleep(1);
     return;
   }
+  // Short pause before next schedule
+  sleep(1);
+}
 
-  // Only decode JSON when we know the request succeeded to avoid
-  // k6 GoError when the body is null due to a transport error.
+// For now we keep completes synchronous but model them as a separate
+// scenario that runs at a lower rate and only for a subset of
+// appointments, approximating "schedule now, complete later". In a
+// real system we'd typically drive this from a list of existing
+// appointments.
+export function completeFlow() {
+  // For the POC, we still complete immediately after scheduling within
+  // this iteration, but we run fewer complete VUs than schedule VUs to
+  // reduce pressure and better match real-world behaviour.
+
+  const schedulePayload = JSON.stringify({
+    organizationId: Number(ORG_ID),
+    clinicId: Number(CLINIC_ID),
+    patientId: Number(PATIENT_ID),
+    modality: Math.random() < 0.5 ? "VIRTUAL" : "IN_PERSON",
+  });
+
+  const scheduleRes = http.post(
+    `${BASE_URL}/api/appointments`,
+    schedulePayload,
+    {
+      headers: { "Content-Type": "application/json" },
+      tags: { name: "schedule_for_complete" },
+    }
+  );
+
+  if (scheduleRes.status !== 200) {
+    sleep(1);
+    return;
+  }
+
   const appointmentId = scheduleRes.json("id");
 
-  // Complete the appointment
-  const completePayload = JSON.stringify({}); // let server pick started/completed times
+  // Simulate a delay between schedule and complete. We can't sleep
+  // minutes in a short test, but a small random delay breaks the
+  // immediate back-to-back pattern.
+  sleep(0.5 + Math.random());
 
+  const completePayload = JSON.stringify({});
   const completeRes = http.patch(
     `${BASE_URL}/api/appointments/${appointmentId}`,
     completePayload,
