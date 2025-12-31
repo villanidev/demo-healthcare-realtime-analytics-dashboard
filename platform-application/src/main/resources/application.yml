@@ -11,7 +11,10 @@ spring:
     hikari:
       maximum-pool-size: 30
       minimum-idle: 10
-      connection-timeout: 10000
+      connection-timeout: 5000
+      idle-timeout: 30000
+      leak-detection-threshold: 2000
+      max-lifetime: 1800000
   jpa:
     hibernate:
       ddl-auto: update
@@ -50,3 +53,10 @@ platform:
     outbox-batch-size: 500
   simulation:
     enabled: false
+  appointment-queue:
+    enabled: true
+    capacity: 500
+    worker-count: 2
+    offer-timeout-ms: 50
+  dashboard:
+    max-sse-clients: 20

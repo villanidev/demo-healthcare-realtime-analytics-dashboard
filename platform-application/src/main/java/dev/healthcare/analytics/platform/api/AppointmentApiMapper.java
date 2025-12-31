@@ -3,9 +3,11 @@ package dev.healthcare.analytics.platform.api;
 import dev.healthcare.analytics.platform.appschema.core.AppointmentEntity;
 import dev.healthcare.analytics.platform.domain.appointment.AppointmentApplicationService;
 import dev.healthcare.analytics.platform.domain.appointment.AppointmentModality;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
+@Component
 public class AppointmentApiMapper {
 
     public AppointmentApplicationService.ScheduleCommand toScheduleCommand(AppointmentApiController.ScheduleAppointmentRequest request) {

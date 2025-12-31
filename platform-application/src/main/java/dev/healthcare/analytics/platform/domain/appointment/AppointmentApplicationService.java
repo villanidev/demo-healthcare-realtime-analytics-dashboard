@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -75,6 +76,21 @@ public class AppointmentApplicationService {
 
                 return updated;
             });
+    }
+
+    public List<Long> findAppointmentIdsScheduledBetweenForTenant(Long organizationId,
+                                                                  Long clinicId,
+                                                                  Instant from,
+                                                                  Instant to) {
+        return appointmentRepository
+			.findByOrganization_IdAndClinic_IdAndStatusAndScheduledAtBetween(organizationId,
+																	clinicId,
+																	AppointmentStatus.SCHEDULED,
+																	from,
+																	to)
+            .stream()
+            .map(AppointmentEntity::getId)
+            .toList();
     }
 
     public record ScheduleCommand(Long organizationId,

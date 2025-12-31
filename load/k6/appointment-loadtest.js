@@ -23,6 +23,10 @@ const SPIKE_START = __ENV.SPIKE_START || "7m";
 // Number of long-lived SSE clients
 const SSE_CLIENTS = Number(__ENV.SSE_CLIENTS || "15");
 
+// Capture the logical start time of the test so we can later
+// query appointments scheduled since this moment via the stats API.
+const TEST_START_ISO = new Date().toISOString();
+
 export const options = {
   scenarios: {
     schedule_ramp_load: {
@@ -52,6 +56,21 @@ export const options = {
       gracefulStop: "10s",
       startTime: "0s",
     },
+    // After the scheduling load is done, we run a single-VU
+    // scenario that polls the stats API until all expected
+    // appointments are visible (or a max number of polls), and
+    // then completes them. EXPECTED_SCHEDULED_COUNT is optional
+    // and can be provided via env if you want a strict assertion.
+    wait_and_complete_all: {
+      executor: "per-vu-iterations",
+      exec: "waitAndCompleteAllScheduled",
+      vus: Number(__ENV.WAIT_COMPLETE_VUS || "1"),
+      iterations: 1,
+      // Start after ramp + hold + ramp-down and spike by default.
+      // You can override via WAIT_COMPLETE_START if needed.
+      startTime: __ENV.WAIT_COMPLETE_START || "10m",
+      gracefulStop: "2m",
+    },
   },
   thresholds: {
     http_req_failed: ["rate<0.05"], // <5% errors
@@ -78,17 +97,109 @@ export function scheduleFlow() {
     }
   );
 
+  // In async queue mode the API returns 202 on success; in
+  // sync mode we still get 200. We treat both as success, and
+  // consider 503 (queue full) as an expected backpressure
+  // signal rather than a hard error.
+  const ok = scheduleRes.status === 200 || scheduleRes.status === 202;
+  const backpressure = scheduleRes.status === 503;
+
   check(scheduleRes, {
-    "schedule status is 200": (r) => r.status === 200,
+    "schedule accepted (200/202)": (r) => ok,
   });
 
-  if (scheduleRes.status !== 200) {
+  if (!ok && !backpressure) {
+    // unexpected failure; pause briefly
     // brief pause before next iteration
     sleep(1);
     return;
   }
   // Short pause before next schedule
   sleep(1);
+}
+
+// This helper scenario is meant to run after the main scheduling
+// load. It queries the stats endpoint from TEST_START_ISO until
+// it sees all expected appointments (if EXPECTED_SCHEDULED_COUNT
+// is provided), then completes each appointment ID returned. When
+// multiple VUs are used for this scenario, each VU processes only
+// its own partition of the ID list based on __VU so we avoid
+// every VU completing all IDs.
+export function waitAndCompleteAllScheduled() {
+  const expectedEnv = __ENV.EXPECTED_SCHEDULED_COUNT;
+  const expected = expectedEnv ? Number(expectedEnv) : null;
+  const maxPolls = Number(__ENV.STATS_MAX_POLLS || "60");
+  const pollIntervalSeconds = Number(__ENV.STATS_POLL_INTERVAL_SECONDS || "5");
+
+  let polls = 0;
+  let lastCount = 0;
+  let appointmentIds = [];
+
+  while (polls < maxPolls) {
+    const url =
+      `${BASE_URL}/api/appointments/stats/by-scheduled-at` +
+      `?organizationId=${ORG_ID}` +
+      `&clinicId=${CLINIC_ID}` +
+      `&fromScheduledAtIso=${encodeURIComponent(TEST_START_ISO)}`;
+
+    const res = http.get(url, { tags: { name: "appointment_stats" } });
+
+    const ok = res.status === 200;
+    check(res, {
+      "stats status is 200": (r) => ok,
+    });
+
+    if (ok) {
+      const body = res.json();
+      lastCount = body.count || 0;
+      appointmentIds = body.appointmentIds || [];
+
+      if (expected === null || lastCount >= expected) {
+        break;
+      }
+    }
+
+    polls += 1;
+    sleep(pollIntervalSeconds);
+  }
+
+  if (expected !== null) {
+    check(null, {
+      "all expected appointments visible in stats": () => lastCount >= expected,
+    });
+  }
+
+  // Partition the ID list across VUs so each VU handles a distinct
+  // slice. We rely on WAIT_COMPLETE_VUS matching the VU count for
+  // this scenario.
+  const totalPartitions = Number(__ENV.WAIT_COMPLETE_VUS || "1");
+  const vuIndex = (__VU || 1) - 1; // __VU is 1-based in k6
+
+  const chunkSize = Math.ceil(appointmentIds.length / totalPartitions) || 0;
+  const start = vuIndex * chunkSize;
+  const end = Math.min(start + chunkSize, appointmentIds.length);
+  const idsForThisVu = appointmentIds.slice(start, end);
+
+  // Now drive completion for this VU's subset of IDs.
+  for (const id of idsForThisVu) {
+    const completePayload = JSON.stringify({});
+    const res = http.patch(
+      `${BASE_URL}/api/appointments/${id}`,
+      completePayload,
+      {
+        headers: { "Content-Type": "application/json" },
+        tags: { name: "complete_from_stats" },
+      }
+    );
+
+    check(res, {
+      "complete status is 200 or 404": (r) =>
+        r.status === 200 || r.status === 404,
+    });
+
+    // Small pacing to avoid hammering the DB in a tight loop.
+    sleep(0.1);
+  }
 }
 
 // For now we keep completes synchronous but model them as a separate
