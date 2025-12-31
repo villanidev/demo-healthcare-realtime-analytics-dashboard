@@ -8,6 +8,10 @@ spring:
     url: jdbc:postgresql://localhost:5432/healthcare_platform
     username: healthcare_app
     password: change_me
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+      connection-timeout: 10000
   jpa:
     hibernate:
       ddl-auto: update
@@ -25,7 +29,23 @@ management:
   endpoint:
     prometheus:
       enabled: true
+  metrics:
+    enable:
+      http:
+        server: true
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+
+logging:
+  level:
+    dev.healthcare.analytics.platform.api: DEBUG
+    dev.healthcare.analytics.platform.domain.appointment: DEBUG
 
 platform:
   stream-pipeline:
     outbox-poll-interval-ms: 1000
+  simulation:
+    enabled: false

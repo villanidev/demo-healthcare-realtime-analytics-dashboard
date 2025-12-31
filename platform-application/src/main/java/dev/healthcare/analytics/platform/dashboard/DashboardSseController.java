@@ -8,12 +8,15 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -36,11 +39,15 @@ public class DashboardSseController {
 
     private final List<ClientSubscription> subscriptions = new CopyOnWriteArrayList<>();
 
+    private final int maxSseClients;
+
     public DashboardSseController(AppointmentFunnelReadService funnelReadService,
                                   ObjectMapper objectMapper,
-                                  MeterRegistry meterRegistry) {
+                                  MeterRegistry meterRegistry,
+                                  @Value("${platform.dashboard.max-sse-clients:200}") int maxSseClients) {
         this.funnelReadService = funnelReadService;
         this.objectMapper = objectMapper;
+        this.maxSseClients = maxSseClients;
 
         Gauge.builder("platform.dashboard.sse.subscriptions", subscriptions, List::size)
                 .description("Number of active SSE dashboard subscriptions")
@@ -50,6 +57,13 @@ public class DashboardSseController {
     @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamAnalytics(@RequestParam("organizationId") String organizationId,
                                       @RequestParam(value = "clinicId", required = false) String clinicId) {
+        int current = subscriptions.size();
+        if (current >= maxSseClients) {
+            LOGGER.warn("Rejecting SSE subscription for org={} clinic={} - reached maxSseClients={} current={}",
+                    organizationId, clinicId, maxSseClients, current);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Too many SSE clients");
+        }
+
         String effectiveClinicId = clinicId != null ? clinicId : "*";
 
         SseEmitter emitter = new SseEmitter(0L);

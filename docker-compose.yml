@@ -1,6 +1,26 @@
 version: "3.9"
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: ./platform-application/Dockerfile
+    container_name: healthcare-analytics-app
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/healthcare_platform
+      SPRING_DATASOURCE_USERNAME: healthcare_app
+      SPRING_DATASOURCE_PASSWORD: change_me
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M # hard container cap; JVM uses up to 256m inside
+          cpus: "0.50" # limit to half a CPU for tests
+
   postgres:
     image: postgres:16-alpine
     container_name: healthcare-analytics-postgres
@@ -40,9 +60,30 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
     depends_on:
       - prometheus
+    volumes:
+      - ./infra/monitoring/grafana/healthcare-kappa-poc-dashboard.json:/etc/grafana/provisioning/dashboards/healthcare/healthcare-kappa-poc-dashboard.json:ro
+      - ./infra/monitoring/grafana/provisioning-dashboards.yml:/etc/grafana/provisioning/dashboards/provisioning-dashboards.yml:ro
+      - ./infra/monitoring/grafana/provisioning-datasources.yml:/etc/grafana/provisioning/datasources/provisioning-datasources.yml:ro
     restart: unless-stopped
+
+  k6:
+    image: grafana/k6:0.54.0
+    container_name: healthcare-analytics-k6
+    working_dir: /scripts
+    volumes:
+      - ./load/k6:/scripts:ro
+    environment:
+      BASE_URL: http://app:8080
+      ORG_ID: "1"
+      CLINIC_ID: "1"
+      PATIENT_ID: "1"
+    # Example command (can be overridden at runtime):
+    command: ["run", "appointment-loadtest.js"]
+    depends_on:
+      - app
 
 networks:
   default:

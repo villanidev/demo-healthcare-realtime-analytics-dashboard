@@ -6,6 +6,7 @@ import dev.healthcare.analytics.platform.domain.appointment.AppointmentModality;
 import net.datafaker.Faker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,7 @@ import java.util.Locale;
  * - should call regular domain services which, in turn, publish to app.outbox_event
  */
 @Component
+@ConditionalOnProperty(prefix = "platform.simulation", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class FakeClinicalActivityScheduler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FakeClinicalActivityScheduler.class);
