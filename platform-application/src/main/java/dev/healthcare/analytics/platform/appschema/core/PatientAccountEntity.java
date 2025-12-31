@@ -10,11 +10,11 @@ public class PatientAccountEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false, cascade = CascadeType.PERSIST)
+    @ManyToOne(optional = false)
     @JoinColumn(name = "organization_id", nullable = false)
     private OrganizationEntity organization;
 
-    @ManyToOne(optional = false, cascade = CascadeType.PERSIST)
+    @ManyToOne(optional = false)
     @JoinColumn(name = "clinic_id", nullable = false)
     private ClinicEntity clinic;
 

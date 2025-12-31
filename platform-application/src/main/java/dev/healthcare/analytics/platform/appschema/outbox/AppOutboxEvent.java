@@ -1,6 +1,8 @@
 package dev.healthcare.analytics.platform.appschema.outbox;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -22,6 +24,7 @@ public class AppOutboxEvent {
     private String eventType;
 
     @Column(name = "event_payload", nullable = false, columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String eventPayload;
 
     @Column(name = "event_time", nullable = false)

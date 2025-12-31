@@ -10,7 +10,7 @@ public class ClinicEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false, cascade = CascadeType.PERSIST)
+    @ManyToOne(optional = false)
     @JoinColumn(name = "organization_id", nullable = false)
     private OrganizationEntity organization;
 

@@ -1,8 +1,6 @@
 package dev.healthcare.analytics.platform.appschema.simulation;
 
-import dev.healthcare.analytics.platform.appschema.core.ClinicEntity;
-import dev.healthcare.analytics.platform.appschema.core.OrganizationEntity;
-import dev.healthcare.analytics.platform.appschema.core.PatientAccountEntity;
+import dev.healthcare.analytics.platform.appschema.core.*;
 import dev.healthcare.analytics.platform.domain.appointment.AppointmentCommandService;
 import dev.healthcare.analytics.platform.domain.appointment.AppointmentModality;
 import net.datafaker.Faker;
@@ -30,9 +28,18 @@ public class FakeClinicalActivityScheduler {
     private final Faker faker = new Faker(Locale.ENGLISH);
 
     private final AppointmentCommandService appointmentCommandService;
+    private final OrganizationRepository organizationRepository;
+    private final ClinicRepository clinicRepository;
+    private final PatientAccountRepository patientAccountRepository;
 
-    public FakeClinicalActivityScheduler(AppointmentCommandService appointmentCommandService) {
+    public FakeClinicalActivityScheduler(AppointmentCommandService appointmentCommandService,
+                                         OrganizationRepository organizationRepository,
+                                         ClinicRepository clinicRepository,
+                                         PatientAccountRepository patientAccountRepository) {
         this.appointmentCommandService = appointmentCommandService;
+        this.organizationRepository = organizationRepository;
+        this.clinicRepository = clinicRepository;
+        this.patientAccountRepository = patientAccountRepository;
     }
 
     @Scheduled(fixedDelayString = "${platform.simulation.fixed-delay-ms:10000}")
@@ -40,16 +47,29 @@ public class FakeClinicalActivityScheduler {
         // DRY + KISS: keep behaviour minimal until we need more complexity.
         int simulatedAppointments = faker.random().nextInt(1, 3);
 
-        // For the POC we keep tenant identities simple and stable.
-        OrganizationEntity org = new OrganizationEntity();
-        ClinicEntity clinic = new ClinicEntity();
-        clinic.setOrganization(org);
-        PatientAccountEntity patient = new PatientAccountEntity();
-        patient.setOrganization(org);
-        patient.setClinic(clinic);
-        patient.setDisplayName(faker.name().fullName());
+        // For the POC we keep tenant identities simple and stable and persist them explicitly.
+        OrganizationEntity org = organizationRepository.findAll().stream().findFirst()
+            .orElseGet(() -> {
+                OrganizationEntity created = new OrganizationEntity();
+                created.setName(faker.company().name());
+                return organizationRepository.save(created);
+            });
+
+        ClinicEntity clinic = clinicRepository.findAll().stream().findFirst()
+            .orElseGet(() -> {
+                ClinicEntity created = new ClinicEntity();
+                created.setOrganization(org);
+                created.setName("Main Clinic");
+                return clinicRepository.save(created);
+            });
 
         for (int i = 0; i < simulatedAppointments; i++) {
+            PatientAccountEntity patient = new PatientAccountEntity();
+            patient.setOrganization(org);
+            patient.setClinic(clinic);
+            patient.setDisplayName(faker.name().fullName());
+            patient = patientAccountRepository.save(patient);
+
             AppointmentModality modality = faker.bool().bool() ? AppointmentModality.VIRTUAL : AppointmentModality.IN_PERSON;
             Instant scheduledAt = Instant.now();
             var appointment = appointmentCommandService.scheduleAppointment(org, clinic, patient, modality, scheduledAt);

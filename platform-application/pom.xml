@@ -13,6 +13,16 @@
     <name>platform-application</name>
     <description>Healthcare analytics platform monolith (OLTP + Kappa analytics pipeline)</description>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring.boot.version}</version>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -35,7 +45,7 @@
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.webjars</groupId>
+            <groupId>org.webjars.npm</groupId>
             <artifactId>htmx.org</artifactId>
             <version>2.0.3</version>
         </dependency>
