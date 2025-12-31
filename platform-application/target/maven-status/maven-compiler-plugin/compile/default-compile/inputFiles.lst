@@ -4,6 +4,7 @@
 /home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/appschema/core/AppointmentEntity.java
 /home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/appschema/core/ClinicEntity.java
 /home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/appschema/core/OrganizationRepository.java
+/home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/dashboard/TenantSelectionController.java
 /home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/appschema/core/PatientAccountEntity.java
 /home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/analyticsschema/repository/AppointmentFunnelFactRepository.java
 /home/villani-ubuntu/projetos/demo-healthcare-realtime-analytics-dashboard/platform-application/src/main/java/dev/healthcare/analytics/platform/analyticsschema/fact/AppointmentFunnelFact.java
